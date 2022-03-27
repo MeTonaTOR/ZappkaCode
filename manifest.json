@@ -1,0 +1,9 @@
+{
+    "name": "Zappka kody",
+    "short_name": "ZappkaKody",
+    "description": "Zappka kody",
+    "start_url": "/",
+    "display": "standalone",
+    "theme_color": "#006420",
+    "background_color": "#006420"
+  }
