@@ -1,6 +1,8 @@
 <?php
+session_start();
 
 define("ZAPPKA", 1);
+
 
 include "inc/init.php";
 include "inc/class_templates.php";
@@ -22,10 +24,14 @@ if(isset($_GET['action'])) {
             $informacja         = $_GET['informacja'];
             $zgodapapierosy   = (int)($_GET['zgodapapierosy'] == "on");
 
-            $pdo->query("INSERT INTO kody ('kod', 'informacja', 'pozostalo', 'zgodapapierosy', 'ostatnieuzycie') VALUES ('".$kod."', '".$informacja."', 3, '".$zgodapapierosy."', '".date("Y-m-d H:i:s", time())."')");
-            
-            $informacja = "<div class='alert alert-success'>Kod dodany poprawnie!</div> <meta http-equiv='refresh' content='3; url=".$_SERVER['HTTP_REFERER']."' /> ";
-            
+            $check = $pdo->query("SELECT * FROM kody WHERE kod = '".$kod."'");
+            if(count($check->fetchAll()) == 0) {
+                $pdo->query("INSERT INTO kody ('kod', 'informacja', 'pozostalo', 'zgodapapierosy', 'ostatnieuzycie') VALUES ('".$kod."', '".$informacja."', 3, '".$zgodapapierosy."', '".date("Y-m-d H:i:s", time())."')");
+                inline_message("index.php", "<div class='alert alert-success'>Kod dodany poprawnie!</div>");
+            } else {
+                inline_message("index.php", "<div class='alert alert-danger'>Kod juz istnieje!</div>");
+            }
+
             break;
         case "zaktualizuj":
             $pdo->query("UPDATE kody SET pozostalo = pozostalo-1, ostatnieuzycie = '".date("Y-m-d H:i:s", time())."' WHERE `kod` = '".$_GET['kod']."'");
@@ -42,9 +48,13 @@ if(isset($_GET['action'])) {
 $stmt = $pdo->query("SELECT * FROM kody WHERE pozostalo != 0 ORDER BY ostatnieuzycie DESC");
 $kody_sql = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-if($stmt->rowCount() == 0) {
+if(count($kody_sql) == 0) {
     $pdo->query("UPDATE `kody` SET `pozostalo` = 3, `ostatnieuzycie` = '".date("Y-m-d H:i:s", time())."'");
-    //header("Location: index.php");
+}
+
+if(isset($_SESSION['inline'])) {
+    $informacja = $_SESSION['inline']['message'];
+    unset($_SESSION['inline']);
 }
 
 $kody = "";
