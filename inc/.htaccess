@@ -1,0 +1,3 @@
+<Files "database.sqlite3">
+    Require all denied
+</Files>

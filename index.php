@@ -1,86 +1,70 @@
 <?php
 
-    function polishMe($value, $prefix, $suffix) {
-        switch($value) {
-            case "1":
-                return $prefix[0]." <b class='updateme'>".$value."</b> ".$suffix[0];
-                break;
-            case "2":
-            case "3":
-            case "4":
-                return $prefix[1]." <b class='updateme'>".$value."</b> ".$suffix[1];
-                break;   
-            default:
-                return $prefix[1]." <b class='updateme'>".$value."</b> ".$suffix[2];
-                break;
-        }
+define("ZAPPKA", 1);
+
+include "inc/init.php";
+include "inc/class_templates.php";
+include "inc/functions.php";
+
+try {
+    $pdo = new PDO('sqlite:inc/database.sqlite3');
+} catch (PDOException $e) {
+    die("Connection failed: " . $e->getMessage());
+}
+
+$informacja = "";
+
+//Troche logiki
+if(isset($_GET['action'])) {
+    switch($_GET['action']) {
+        case "dodajkod":
+            $kod                = (int)$_GET['kod'];
+            $informacja         = $_GET['informacja'];
+            $zgodapapierosy   = (int)($_GET['zgodapapierosy'] == "on");
+
+            $pdo->query("INSERT INTO kody ('kod', 'informacja', 'pozostalo', 'zgodapapierosy', 'ostatnieuzycie') VALUES ('".$kod."', '".$informacja."', 3, '".$zgodapapierosy."', '".date("Y-m-d H:i:s", time())."')");
+            
+            $informacja = "<div class='alert alert-success'>Kod dodany poprawnie!</div> <meta http-equiv='refresh' content='3; url=".$_SERVER['HTTP_REFERER']."' /> ";
+            
+            break;
+        case "zaktualizuj":
+            $pdo->query("UPDATE kody SET pozostalo = pozostalo-1, ostatnieuzycie = '".date("Y-m-d H:i:s", time())."' WHERE `kod` = '".$_GET['kod']."'");
+            die("OK");
+            break;
+
+        default:
+            die("Hm?");
+            break;
+    }
+}
+
+
+$stmt = $pdo->query("SELECT * FROM kody WHERE pozostalo != 0 ORDER BY ostatnieuzycie DESC");
+$kody_sql = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+if($stmt->rowCount() == 0) {
+    $pdo->query("UPDATE `kody` SET `pozostalo` = 3, `ostatnieuzycie` = '".date("Y-m-d H:i:s", time())."'");
+    //header("Location: index.php");
+}
+
+$kody = "";
+
+foreach ($kody_sql as $kod) {
+    $zgoda      = ($kod['zgodapapierosy']) ? '<font color="green">Tak</font>' : '<font color="red">Nie</font>';
+    $border     = ($kod['zgodapapierosy']) ? 'border-success' : 'border-danger';
+
+    $ean = "ean/code_".$kod['kod'].".png";
+
+    if(!file_exists($ean)) {
+        file_put_contents($ean, file_get_contents("http://bwipjs-api.metafloor.com/?bcid=code128&text=".$kod['kod']));
     }
 
-    $options = [
-        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES   => false,
-    ];
+    $mainfile = $ean;
 
-    try {
-        $pdo = new PDO("mysql:host=HOSTNAME;dbname=DBNAME;charset=utf8mb4", "USERNAME", "PASSWORD", $options);
-    } catch (\PDOException $e) {
-        throw new \PDOException($e->getMessage(), (int)$e->getCode());
-    }
+    eval('$kody .= "'.render_template('kody').'";');
+}
 
-    if($_GET['lowid']) {
-        $pdo->query("UPDATE `kody` SET `pozostało` = `pozostało`-1 WHERE `id` = '".$_GET['lowid']."'");
-        die("OK");
-    }
+eval('$mainpage = "'.render_template('index').'";');
+output_page($mainpage);
 
-    $stmt = $pdo->query("SELECT * FROM `kody` WHERE `pozostało` != 0 ORDER BY `id` DESC LIMIT 0,25");
-    $stmt2 = $pdo->query("SELECT * FROM `kody` WHERE `pozostało` != 0 ORDER BY `id` DESC");
-    $stmt3 = $pdo->query("SELECT * FROM `kody` ORDER BY `ostatnieuzycie` DESC LIMIT 0,1");
-
-    if(date("d") != date("d", strtotime($stmt3->fetch()['ostatnieuzycie']))) {
-        $pdo->query("UPDATE `kody` SET `pozostało` = 3, `ostatnieuzycie` = '".date("Y-m-d H:i:s", time())."'");
-        header("Refresh:0");
-    }
-
-    if(strpos($_SERVER['HTTP_USER_AGENT'], "Android") == false && !$_GET['bypass']) {
-        die("Not allowed");
-    }
 ?>
-
-<!DOCTYPE html>
-<html>
-    <head>
-        <title>Guess?</title>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css">
-        <link rel="stylesheet" href="main/style.css" />
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link rel="manifest" href="manifest.json">
-    </head>
-
-    <body>
-        <div class="content">
-
-        <?php if($stmt->rowCount() == 0) { ?>
-            <div class="alert alert-danger">Brak nieużytych kodów!</div>
-        <?php } else { ?>
-            <?php while ($row = $stmt->fetch()) { ?>
-                <?php $informacja = empty($row['informacja']) ? 'Nieznane' : $row['informacja']; ?>
-                <div class="zappkacode_block" data-kodid="<?=$row['id']?>" data-usesleft="<?=$row['pozostało']?>" data-info="<?=$informacja?>">
-                    <br />
-        
-                    <div><img class="zappkacode" src="http://bwipjs-api.metafloor.com/?bcid=code128&text=<?=$row['kod']?>" /></div>
-                    <div class="zappkainfo">
-                        <span class="update_code_<?=$row['id']?>"><?=$informacja?> - <?=$row['pozostało']?></span>
-                    </div>
-                </div>
-            <?php } ?>
-            <p class="infocode alert alert-info">
-                <?=polishMe($stmt2->rowCount(), array("Pozostał", "Pozostało"), array("kod", "kody", "kodów"));?>
-            </p>
-        <?php } ?>
-        </div>
-
-        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-        <script type="text/javascript" src="main/script.js"></script>
-    </body>
-</html>
